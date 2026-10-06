@@ -27,15 +27,6 @@ export function WalletPanel() {
     };
   }, [open]);
 
-  async function connectInjected() {
-    try {
-      await wallet.connectInjected();
-      setMessage("Injected wallet connected.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not connect wallet.");
-    }
-  }
-
   function disconnect() {
     wallet.disconnect();
     setMessage("Disconnected.");
@@ -64,14 +55,27 @@ export function WalletPanel() {
           <span className="zs-tag">Active identity</span>
           <div className="zs-mono mt-1 break-all text-sm">{wallet.address ?? "Browsing read-only"}</div>
           <div className="mt-4 grid gap-2">
-            <button className="zs-btn-ghost flex items-center justify-center gap-2 px-3 py-2 text-sm" onClick={connectInjected}>
-              <PlugZap size={14} aria-hidden /> {wallet.mode === "injected" ? "Reconnect injected wallet" : "Connect injected wallet (MetaMask / Rabby)"}
-            </button>
-            {wallet.mode !== "none" ? (
+            {wallet.mode === "injected" ? (
               <button className="zs-btn-ghost flex items-center justify-center gap-2 px-3 py-2 text-sm" onClick={disconnect}>
                 <LogOut size={14} aria-hidden /> Disconnect
               </button>
-            ) : null}
+            ) : (
+              wallet.connectors.map((connector) => (
+                <button
+                  key={connector.uid}
+                  className="zs-btn-ghost flex items-center justify-center gap-2 px-3 py-2 text-sm"
+                  disabled={wallet.connecting}
+                  onClick={() =>
+                    wallet.connectWith(connector).then(
+                      () => setMessage("Wallet connected."),
+                      (error: unknown) => setMessage(error instanceof Error ? error.message : "Could not connect wallet."),
+                    )
+                  }
+                >
+                  <PlugZap size={14} aria-hidden /> {connector.name}
+                </button>
+              ))
+            )}
           </div>
           {message ? (
             <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]" aria-live="polite">

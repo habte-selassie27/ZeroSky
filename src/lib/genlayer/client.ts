@@ -1,8 +1,9 @@
 import { createAccount, createClient } from "genlayer-js";
 import { chain, CHAIN_NAME, EXPLORER_BASE, GENLAYER_ENDPOINT } from "./config";
 
-export async function createInjectedClient(address: `0x${string}`) {
-  const provider = typeof window !== "undefined" ? window.ethereum : undefined;
+export async function createInjectedClient(address: `0x${string}`, injectedProvider?: unknown) {
+  type EthereumProvider = { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> };
+  const provider = (injectedProvider ?? (typeof window !== "undefined" ? window.ethereum : undefined)) as EthereumProvider | undefined;
   if (provider) {
     const chainIdHex = `0x${chain.id.toString(16)}`;
     try {
@@ -24,7 +25,7 @@ export async function createInjectedClient(address: `0x${string}`) {
       }
     }
   }
-  const client = createClient({ chain, endpoint: GENLAYER_ENDPOINT, account: address, provider });
+  const client = createClient({ chain, endpoint: GENLAYER_ENDPOINT, account: address, provider: provider as NonNullable<Parameters<typeof createClient>[0]>["provider"] });
   await client.connect(CHAIN_NAME);
   return client;
 }

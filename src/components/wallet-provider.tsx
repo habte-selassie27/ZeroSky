@@ -1,14 +1,17 @@
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { useAccount, useConnect, useDisconnect, useSignMessage, type Connector } from "wagmi";
 import { createInjectedClient } from "@/lib/genlayer/client";
 import { shortenAddress } from "@/lib/format";
 
-type WalletMode = "none" | "injected";
+export type WalletMode = "none" | "injected";
 
 type WalletContextValue = {
   mode: WalletMode;
   address?: `0x${string}`;
   warningAccepted: boolean;
-  connectInjected: () => Promise<void>;
+  connectors: readonly Connector[];
+  connectWith: (connector: Connector) => Promise<void>;
+  connecting: boolean;
   disconnect: () => void;
   getWriteClient: () => Promise<Awaited<ReturnType<typeof createInjectedClient>>>;
 };
@@ -16,32 +19,39 @@ type WalletContextValue = {
 const WalletContext = createContext<WalletContextValue | null>(null);
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
-  const [mode, setMode] = useState<WalletMode>("none");
-  const [address, setAddress] = useState<`0x${string}` | undefined>(undefined);
+  const { address, isConnected, connector } = useAccount();
+  const { connectAsync, connectors, isPending } = useConnect();
+  const { disconnect: wagmiDisconnect } = useDisconnect();
+  const { signMessageAsync } = useSignMessage();
+  const [verified, setVerified] = useState(false);
 
-  const connectInjected = useCallback(async () => {
-    if (typeof window === "undefined" || !window.ethereum) throw new Error("No injected wallet was found in this browser.");
-    const accounts = (await window.ethereum.request({ method: "eth_requestAccounts" })) as `0x${string}`[];
-    if (!accounts?.[0]) throw new Error("No wallet account was returned.");
-    const message = `ZeroSky: verify I own ${accounts[0]}`;
-    await window.ethereum.request({ method: "personal_sign", params: [message, accounts[0]] });
-    setAddress(accounts[0]);
-    setMode("injected");
-  }, []);
+  const mode: WalletMode = isConnected && address && verified ? "injected" : "none";
+
+  const connectWith = useCallback(
+    async (target: Connector) => {
+      const result = await connectAsync({ connector: target });
+      await signMessageAsync({ message: `ZeroSky: verify I own ${result.accounts[0]}` });
+      setVerified(true);
+    },
+    [connectAsync, signMessageAsync],
+  );
 
   const disconnect = useCallback(() => {
-    setMode("none");
-    setAddress(undefined);
-  }, []);
+    wagmiDisconnect();
+    setVerified(false);
+  }, [wagmiDisconnect]);
 
   const getWriteClient = useCallback(async () => {
-    if (mode === "injected" && address) return createInjectedClient(address);
+    if (mode === "injected" && address && connector) {
+      const provider = await connector.getProvider();
+      return createInjectedClient(address, provider);
+    }
     throw new Error("Connect your wallet before sending a transaction.");
-  }, [address, mode]);
+  }, [address, connector, mode]);
 
   const value = useMemo(
-    () => ({ mode, address, warningAccepted: true, connectInjected, disconnect, getWriteClient }),
-    [address, connectInjected, disconnect, getWriteClient, mode],
+    () => ({ mode, address: mode === "injected" ? address : undefined, warningAccepted: true, connectors, connectWith, connecting: isPending, disconnect, getWriteClient }),
+    [address, connectWith, connectors, disconnect, getWriteClient, isPending, mode],
   );
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;
