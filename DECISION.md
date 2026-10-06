@@ -1,0 +1,260 @@
+# ZeroSky Decision Record
+
+## Provenance note on this record
+
+This decision record does not re-run an eight-candidate brainstorm from zero. The idea —
+parametric weather micro-insurance — was already picked by the project owner from the same
+shortlist that produced the sibling `permamission` project in this workspace (see its
+`DECISION.md`, candidate 3: "ZeroSky Cover: parametric insurance for weather-triggered small
+business losses"). What follows is honest reasoning about why *this* idea clears every gate
+GenLayer projects are judged on, not a re-derivation of alternatives that were already set
+aside when the owner chose it.
+
+## The product
+
+A farmer, market-stall owner, or outdoor events operator buys a policy against one peril
+(rain, heat, or wind) at one location for a coverage window, paying a premium in
+native GEN into a shared pool. After the window ends, anyone can permissionlessly trigger
+`check_claim`, which fetches weather-station data, a satellite/precipitation-style summary, and
+local news/community reports for that location and window, and asks GenLayer consensus to
+normalize and reconcile them into one canonical numeric measurement. The contract compares that
+measurement with the exact trigger stored on the policy; a met trigger pays automatically, a
+miss declines, and conflicting or missing evidence returns INSUFFICIENT_EVIDENCE, which is
+retryable rather than final.
+
+## Counterfactual: why not a single oracle or backend
+
+A conventional parametric insurer runs a backend that pulls one weather API, applies a
+threshold, and pays or denies. Two distrusting parties sit on either side of that API call:
+
+- **The farmer/policyholder** wants a payout whenever their real losses match a real weather
+  event, and is exposed if the insurer's chosen single feed is late, sparse, wrong for their
+  exact coordinates, or simply not queried in good faith when a payout is expensive for the
+  insurer.
+- **The pool/other policyholders** (and, in effect, the insurer standing behind the pool) want
+  payouts to happen only for real events, and are exposed if a single feed is gamed, stale, or
+  reports a nearby but non-representative station reading as if it were the insured location.
+
+A single backend, even a well-intentioned one, is *both* the party that decides and the party
+with a financial stake in that decision, or is trusted blindly by both sides if run by a third
+party. GenLayer removes that single point of trust: independent validators each fetch the
+evidence themselves inside consensus and must agree on a normalized measurement and its side of
+the stored threshold before deterministic contract arithmetic can authorize a transfer.
+
+## Why the payout decision is irreducibly semantic
+
+This is not "read one deterministic price/weather feed and compare to a number." Three
+qualitatively different evidence types are combined for every claim:
+
+1. **ERA5 reanalysis data** — numeric but gridded at roughly 9-31km resolution.
+2. **NASA POWER data** — numeric but independently modeled at roughly 50km resolution and, for
+   wind, expressed in m/s rather than the policy's canonical km/h.
+3. **Local news/community reports** — free-text corroboration or contradiction ("flooding
+   reported in the district" vs. "dry spell continues") that a deterministic parser cannot
+   reliably reconcile against the other two.
+
+Deciding whether these three sources, taken together, mean the insured threshold was crossed —
+and by how much — requires judgement: is a station reading representative of the insured
+coordinates, does a satellite summary corroborate or contradict it, do local reports change the
+picture, and is the combined picture even complete enough to decide at all. That is exactly the
+class of question `gl.eq_principle.prompt_comparative` exists for: validators must independently
+gather the same evidence, normalize units and missing values, and agree on a canonical numeric
+measurement and which side of the stored threshold it falls.
+
+## Non-determinism budget
+
+ZeroSky now runs **two separate** `gl.eq_principle.prompt_comparative` consensus rounds, each
+independently kept inside the project's 2-4 nondet-operation budget:
+
+### `check_claim` — four operations (unchanged from the original design)
+
+1. `gl.nondet.web.render(...)` — fetch weather-station style evidence for the location/window.
+2. `gl.nondet.web.render(...)` — fetch satellite/precipitation-summary style evidence.
+3. `gl.nondet.web.render(...)` — fetch local news/community-report style evidence.
+4. `gl.nondet.exec_prompt(...)` — reconcile normalized evidence into `resolved_value_milli` or
+   an explicit abstention, with a supporting rationale returned as JSON.
+
+This sits at the top of the target 2-4 operation budget deliberately: dropping any one of the
+three fetches would remove exactly the cross-source reconciliation that makes the decision
+semantic rather than a single-feed lookup, which is the whole point of the gate below.
+
+### `request_quote` — two operations (new, underwriting)
+
+1. `gl.nondet.web.render(...)` — one continuous multi-year climatology fetch from Open-Meteo's
+   archive API.
+2. `gl.nondet.exec_prompt(...)` — reconcile the fetched history into a banded risk rating with
+   a rationale citing the real figures it found, returned as JSON.
+
+This sits at the bottom of the budget deliberately, with headroom below `check_claim`'s four
+operations: underwriting is a single-source statistical read (how often, historically, did this
+condition occur here), not a multi-source dispute needing a tie-breaker between disagreeing
+providers. Adding a second climatology source (e.g. NASA POWER, mirroring `check_claim`'s basis-
+risk design) was considered and rejected for this round specifically: `check_claim`'s
+three-source reconciliation exists to resolve disagreement about whether a *specific past event*
+already happened, where basis risk (a coarse grid smoothing away a real localised event) is the
+central risk being managed. `request_quote` is instead estimating a *distribution* over many past
+years at one location; the exact figures matter less than the shape of the historical record, and
+a second grid at ~50km resolution over the same broad time window would agree with the first far
+more often than it would meaningfully change the risk band. One well-chosen source stays honest
+about what this step can support (see "Evidence fetches" below) without manufacturing a second
+disagreement to reconcile that the design does not actually need.
+
+Why the climatology fetch is one continuous multi-year range, not one call per year (verified
+against the real API with `curl` before writing the contract): Open-Meteo's archive API only
+accepts a single continuous `start_date`/`end_date` range per call — there is no "same calendar
+day across N disjoint years" query. Fetching each of the last 5-10 years separately would need
+5-10 separate `gl.nondet.web.render` calls on its own, which blows the entire 2-4 operation
+budget before the reconciliation prompt is even counted. The one-fetch alternative that fits the
+budget is a single continuous range covering roughly the 3 years immediately prior to the
+proposed coverage window (`curl`-measured at ~20KB / ~1100 days of daily JSON for a real 3-year
+span), with the reconciliation prompt told to locate the calendar days matching the target
+window within each year present. This trades "5-10 years of history" down to "~3 years" in
+exchange for staying at one fetch; this is disclosed, not hidden, in "Honest limitations" below.
+
+## Underwriting: pricing likelihood, not just capping claim size
+
+Before this pass, `buy_policy` bounded claim *size* (10x premium, 20% of pool, aggregate
+liability) but never priced claim *likelihood*: a buyer could write an easy-to-trigger threshold
+in free text and still buy up to the flat multiplier's ceiling against it. `request_quote`
+closes that gap by pricing the condition's historical likelihood first, in its own consensus
+round, before any purchase is possible.
+
+**UNPRICEABLE is refused outright, not merely discounted.** Mirroring `INSUFFICIENT_EVIDENCE`'s
+abstention discipline exactly: thin or conflicting historical data (e.g. fewer than two
+comparable past years present in the fetched window) means the contract has no honest basis to
+price the condition at any multiple, so `buy_policy_from_quote` refuses to sell against it. The
+quote itself is still stored — the abstention is auditable — but `max_payout_multiple` and
+`required_premium` are both zero and no purchase can proceed.
+
+**Premium is derived by the contract, not chosen by the buyer.** The buyer states
+`requested_payout` (how much cover they want); the contract computes
+`required_premium = ceil(requested_payout / BAND_MULTIPLIER[risk_band])`, floored at
+`MIN_PREMIUM_WEI` (0.001 GEN) so a small requested_payout cannot round down to a near-dust
+premium. This was a deliberate design change during this pass, away from an earlier version
+where the buyer chose `payout_amount` at purchase time against a band-derived ceiling: letting
+the buyer pick both premium and payout independently reopened exactly the unpriced-leverage gap
+this whole feature exists to close (a buyer could still under-pay relative to the band by
+picking a small premium under the ceiling). Deriving premium mechanically from the quote's fixed
+terms leaves the buyer exactly one dial — how much cover to request — with the price for that
+cover fixed by the risk the consensus round already priced.
+
+**A real, load-bearing consequence of that design: `fund_pool` had to be added.** Because
+`required_premium` is always strictly less than `requested_payout` for any real leveraged policy
+(every `BAND_MULTIPLIER` value is >= 3), the 20%-of-pool concentration cap
+(`payout <= (pool_balance + premium) / 5`) is mathematically impossible to satisfy for the very
+first purchase against a completely empty pool, for any band, on any deployment — not just in
+tests. `fund_pool` is a plain deterministic payable deposit (no consensus, no policy created,
+does not touch `outstanding_liability`) that exists specifically to break that bootstrap
+deadlock, the same way a real parametric insurer's pool is seeded by underwriters/liquidity
+providers depositing capital independent of any single policy. This was discovered, not
+anticipated: the first StudioNet deploy of the redesigned contract could not sell its own first
+policy until `fund_pool` was added, which is exactly the kind of gap this task's "real on-chain
+proof" requirement exists to surface.
+
+**`buy_policy_from_quote` is open to any sender, not only the address that requested the quote.**
+A quote's content — peril, location, structured threshold, requested payout, risk band, required
+premium — is public market data about a location/window, not a private offer to one address.
+There is no confidentiality reason to restrict who may act on it, and doing so would cut against
+this contract's existing permissionless philosophy (`check_claim` and `expire_unclaimed` are
+both already callable by anyone). The `consumed` flag, not sender identity, is what prevents a
+quote from being double-spent.
+
+**Transaction value must equal `required_premium` exactly, not merely `>=` it.** This project
+already has one documented, unresolved defect: a reverted `@gl.public.write.payable` call does
+not refund `gl.message.value` (see README "Honest limitations"). Accepting overpayment and
+crediting only `required_premium` to the pool would strand the excess by the same mechanism —
+a second stranded-value edge case layered on top of the first. Requiring an exact match instead
+means overpayment is rejected before any state changes, so the buyer's wallet still shows the
+funds and the transaction can simply be resubmitted with the correct value.
+
+## Abstention: INSUFFICIENT_EVIDENCE is not a denial
+
+If the three sources conflict, or none of them carry location/date-specific detail, the leader
+(and, under the comparative principle, every validator) is instructed to return
+`INSUFFICIENT_EVIDENCE` rather than force a guess between "no loss" and "loss." The contract
+routes that verdict to `STATUS_CHECKING`, *not* `STATUS_DECLINED` or `STATUS_PAID_OUT` — the
+policy is left resolvable. After a fixed cooldown (`RECHECK_COOLDOWN_SECONDS`, 30 minutes),
+anyone can call `check_claim` again, permissionlessly, without requiring the original
+policyholder to be present or the insurer/admin to act. This is the keeper pattern: a busy or
+disengaged party can never permanently block a resolvable claim, and the contract never
+silently sits on an ambiguous verdict.
+
+## Latency architecture: fast writes vs. the slow step
+
+- `buy_policy` is a pure deterministic write: validate inputs, take payment via
+  `@gl.public.write.payable`, store the policy, and return an id. No consensus round, no LLM,
+  no web fetch — fast and cheap, exactly like an ordinary transaction.
+- `check_claim` is the one slow step. It is guarded by a deterministic gate (coverage window
+  must have ended, or cooldown must have elapsed since the last INSUFFICIENT_EVIDENCE check)
+  *before* any nondeterministic operation runs, so a call that cannot yet be evaluated fails
+  cheaply with `gl.vm.UserError` rather than burning a consensus round.
+- `check_claim` is explicitly permissionless — any address may call it once the gate opens, not
+  only the policyholder or the admin. Combined with the retryable `INSUFFICIENT_EVIDENCE`
+  outcome, in-flight claims are always resumable by anyone, which is the intended pattern for a
+  slow, evidence-fetching consensus step that must not depend on one specific caller's
+  availability.
+- `expire_unclaimed` is a second, separate deterministic sweep for policies nobody ever
+  triggered a claim check on at all, callable by anyone after coverage end plus the same
+  cooldown, so a forgotten policy still reaches a terminal state instead of sitting active
+  forever.
+
+## Value handling and terminal states
+
+Premiums are paid into a shared pool (`pool_balance`), not to individual per-policy escrow, so
+the pool can cover payouts even when a given policyholder's individual premium is smaller than
+their payout amount — this is the actuarial pooling that makes insurance work at all, and it is
+also why gate B (two distrusting parties) is satisfied *within the value flow itself*: a
+policyholder wants their own claim paid; the rest of the pool wants that payout to only happen
+on a real, evidenced loss, because it comes out of shared funds.
+
+Every terminal state has an explicit resting place for funds:
+
+- `STATUS_PAID_OUT` — `emit_transfer` moves `payout_amount` (capped at available pool balance)
+  to the policyholder.
+- `STATUS_DECLINED` — premium remains in the pool; no transfer.
+- `STATUS_EXPIRED_NO_CLAIM` — premium remains in the pool; no transfer (nobody ever triggered a
+  check, so there is nothing to adjudicate).
+- `STATUS_CHECKING` (abstention) is explicitly *not* terminal — it is a retry state, and funds
+  simply remain in the pool until a subsequent check resolves it.
+
+## Gates (A-G) walkthrough
+
+- **A — Two distrusting parties**: policyholder (wants real losses paid) vs. the shared pool /
+  other policyholders (wants no payout without real evidence). See counterfactual above.
+- **B — Native value at stake**: premiums and payouts are real GEN moving through
+  `@gl.public.write.payable` and `emit_transfer`, not a side-channel record.
+- **C — Irreducibly semantic decision**: deciding which normalized gridded measurement represents
+  the insured location when independent providers disagree, using location-specific reports as
+  corroboration, is judgement. Once resolved, the threshold comparison itself is deterministic.
+- **D — Evidence fetched contract-side**: all three `gl.nondet.web.render` calls happen inside
+  the leader function of the same consensus round that produces the verdict.
+- **E — Reusable, not a one-shot demo**: any number of policies, perils, and locations can be
+  created and checked over the contract's lifetime; nothing about the design assumes a single
+  use.
+- **F — Decision depth / recoverability**: `INSUFFICIENT_EVIDENCE` is retryable via a
+  permissionless cooldown-gated recheck rather than a dead end.
+- **G — Latency-appropriate architecture**: fast deterministic writes (`fund_pool`,
+  `buy_policy_from_quote`) for value movement, two separate, explicitly slow,
+  permissionlessly-triggerable consensus steps -- `request_quote` for underwriting,
+  `check_claim` for claim evaluation -- each with its own deterministic pre-gate so an
+  ineligible call fails cheaply before any nondeterministic operation runs.
+
+Underwriting (`request_quote`) satisfies the same gates independently: it moves no value itself
+but *gates* how much value a subsequent purchase may move (gate B, indirectly), it is
+irreducibly semantic (pricing likelihood from a real historical time series is judgement, not a
+lookup -- gate C), its one fetch happens inside the leader function of its own consensus round
+(gate D), any number of quotes can be requested over the contract's lifetime (gate E), and
+`UNPRICEABLE` is the same non-dead-end abstention as `INSUFFICIENT_EVIDENCE` -- a quote is still
+stored and auditable, purchase is simply refused (gate F).
+
+## Self-audit
+
+The closest sibling idea in the original shortlist is PermaMission (evidence-gated fund
+release under a charter). ZeroSky differs in three structural ways: it pools value from many
+independent premium-payers rather than one steward's treasury, it reconciles three
+heterogeneous evidence types per decision instead of one evidence URL, and its abstention state
+is time-cooldown-gated and keeper-triggered rather than challenge-triggered. If parametric
+insurance were unavailable as a direction, the next best fit from the original shortlist would
+have been TrapForge (objective-but-still-evidence-graded payouts), but it lacks the
+three-source reconciliation that makes ZeroSky's decision genuinely semantic rather than a
+single pass/fail check.
