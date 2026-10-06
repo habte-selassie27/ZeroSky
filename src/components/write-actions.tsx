@@ -87,11 +87,12 @@ function preflightQuoteError(state: {
 }
 
 function writeErrorMessage(error: unknown, fallback: string) {
-  const message = error instanceof Error ? error.message : String(error);
-  if (message.includes("Failed to fetch Version") || message.includes("unknown RPC error")) {
+  const raw = error instanceof Error ? error.message || String(error) : String(error);
+  if (!raw) return fallback;
+  if (raw.includes("Failed to fetch Version") || raw.includes("unknown RPC error")) {
     return "Injected wallet RPC is not compatible with this GenLayer write. Use the browser wallet instead, then try again.";
   }
-  return error instanceof Error ? error.message : fallback;
+  return raw.length > 240 ? `${raw.slice(0, 240)}…` : raw;
 }
 
 function refreshAfterConsensus(revalidate: () => unknown) {
