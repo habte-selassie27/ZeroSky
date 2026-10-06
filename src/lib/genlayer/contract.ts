@@ -163,15 +163,15 @@ async function readMaybe<T>(read: () => Promise<unknown>): Promise<T | undefined
 // agreement (the tx ends at VALIDATORS_TIMEOUT). The GenVM execution_result alone is
 // therefore not enough to call a write committed: the terminal tx status must also be one of
 // the success states and the leader receipt must report a successful execution.
-const DECIDED_STATUSES = new Set([
-  "ACCEPTED",
-  "FINALIZED",
+// DECIDED set for CANCELED/timeout statuses ends polling and fails; those never become a
+// successful write. ACCEPTED is a *stop*-state for polling only insofar as we keep watching --
+// returning at ACCEPTED would freeze the tx there because the provider treats it as complete.
+const DECIDED_FAILURE_STATUSES = new Set([
   "CANCELED",
   "UNDETERMINED",
   "VALIDATORS_TIMEOUT",
   "LEADER_TIMEOUT",
 ]);
-const SUCCESS_STATUSES = new Set(["ACCEPTED", "FINALIZED"]);
 
 export async function waitAccepted(client: Client, hash: TransactionHash) {
   const deadline = Date.now() + 15 * 60 * 1000;
@@ -179,7 +179,13 @@ export async function waitAccepted(client: Client, hash: TransactionHash) {
 
   for (;;) {
     const status = String(finalized?.statusName ?? finalized?.status ?? "");
-    if (DECIDED_STATUSES.has(status)) break;
+    if (status === "FINALIZED") break;
+    if (DECIDED_FAILURE_STATUSES.has(status)) {
+      throw new Error(
+        `GenLayer consensus for ${hash} ended in state ${status}, not a committed write. ` +
+        "No quote or policy was recorded and no payouts can be expected; retry the request, and check the tx in the explorer.",
+      );
+    }
     if (Date.now() > deadline) {
       throw new Error(
         `Timed out waiting for consensus on ${hash}: still in state "${status || "UNKNOWN"}". ` +
@@ -188,14 +194,6 @@ export async function waitAccepted(client: Client, hash: TransactionHash) {
     }
     await new Promise((resolve) => setTimeout(resolve, 4000));
     finalized = await client.getTransaction({ hash });
-  }
-
-  const status = String(finalized?.statusName ?? finalized?.status ?? "");
-  if (!SUCCESS_STATUSES.has(status)) {
-    throw new Error(
-      `GenLayer consensus for ${hash} ended in state ${status}, not a committed write. ` +
-      "No quote or policy was recorded and no payouts can be expected; retry the request, and check the tx in the explorer.",
-    );
   }
 
   const result = finalized?.consensus_data?.leader_receipt?.[0]?.execution_result;

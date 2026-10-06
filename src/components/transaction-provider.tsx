@@ -13,7 +13,7 @@ type TransactionContextValue = {
 
 const TransactionContext = createContext<TransactionContextValue | null>(null);
 const COMPLETE_STATUSES = ["ACCEPTED", "FINALIZED", "CANCELED", "UNDETERMINED", "FAILED"] as const;
-const ACTIVE_STATUSES = ["PENDING", "PROPOSING", "COMMITTING", "REVEALING", "READY_TO_FINALIZE"] as const;
+const ACTIVE_STATUSES = ["PENDING", "PROPOSING", "COMMITTING", "REVEALING", "READY_TO_FINALIZE", "ACCEPTED"] as const;
 const STALE_AFTER_MS = 2 * 60 * 60 * 1000;
 
 function shouldRefresh(tx: StoredTransaction) {
