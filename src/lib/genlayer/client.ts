@@ -1,5 +1,5 @@
 import { createAccount, createClient } from "genlayer-js";
-import { chain, CHAIN_NAME, EXPLORER_BASE, GENLAYER_ENDPOINT } from "./config";
+import { chain, EXPLORER_BASE, GENLAYER_ENDPOINT } from "./config";
 
 export async function createInjectedClient(address: `0x${string}`, injectedProvider?: unknown) {
   type EthereumProvider = { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> };
@@ -26,17 +26,9 @@ export async function createInjectedClient(address: `0x${string}`, injectedProvi
     }
   }
   const client = createClient({ chain, endpoint: GENLAYER_ENDPOINT, account: address, provider: provider as NonNullable<Parameters<typeof createClient>[0]>["provider"] });
-  try {
-    await client.connect(CHAIN_NAME);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String((err as { message?: unknown })?.message ?? err);
-    if (msg.includes("wallet_getSnaps") || msg.includes("Snap")) {
-      throw new Error(
-        "This wallet does not support GenLayer's MetaMask Snap. Use MetaMask with the GenLayer Snap enabled, or the in-app browser wallet.",
-      );
-    }
-    throw err;
-  }
+  // Intentionally do NOT call client.connect(CHAIN_NAME): that path forces the
+  // MetaMask GenLayer Snap. With plain EIP-1193 providers, genlayer-js routes
+  // eth_sendTransaction straight through the wallet transport.
   return client;
 }
 
