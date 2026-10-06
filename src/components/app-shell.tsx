@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, NavLink } from "react-router";
+import { Link, NavLink, useLocation } from "react-router";
 import { CloudRain, ExternalLink, Menu, X } from "lucide-react";
 import { WalletPanel } from "./wallet-panel";
 import { ThemeToggle } from "./theme-toggle";
@@ -8,6 +8,14 @@ import { CONTRACT_ADDRESS, explorerAddressUrl } from "@/lib/genlayer/config";
 const NAV_ITEMS = [
   { to: "/policies", label: "The Ledger" },
   { to: "/dashboard", label: "Your Tickets" },
+];
+
+// Deep links into the home page's tabbed sections (src/pages/home.tsx).
+const SECTION_LINKS = [
+  { to: "/", search: "", label: "Overview" },
+  { to: "/?s=reading-line", search: "?s=reading-line", label: "The Reading Line" },
+  { to: "/?s=why-trust", search: "?s=why-trust", label: "Why claims are hard" },
+  { to: "/?s=how-it-works", search: "?s=how-it-works", label: "How ZeroSky works" },
 ];
 
 type NavLinkState = { isActive: boolean };
@@ -49,12 +57,37 @@ function ExplorerLink({ className }: { className?: string }) {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [stuck, setStuck] = useState(false);
+  const location = useLocation();
+
+  // Which home section the footer marks as current: null off the home page,
+  // "" (Overview) for an unknown `s` — home treats any bad value as Overview.
+  const onHome = location.pathname === "/";
+  const currentSectionSearch = !onHome
+    ? null
+    : SECTION_LINKS.some((link) => link.search === location.search)
+      ? location.search
+      : "";
 
   useEffect(() => {
     const onScroll = () => setStuck(window.scrollY > 6);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // Publish the live header height so sticky sub-navigation (the home page's
+  // section tabs) parks directly beneath it, including when the mobile menu
+  // panel changes that height.
+  useEffect(() => {
+    const header = document.querySelector<HTMLElement>(".zs-header");
+    if (!header) return;
+    const sync = () => {
+      document.documentElement.style.setProperty("--zs-header-h", `${header.offsetHeight}px`);
+    };
+    sync();
+    const observer = new ResizeObserver(sync);
+    observer.observe(header);
+    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
@@ -115,6 +148,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   {item.label}
                 </NavLink>
               ))}
+              <span className="zs-tag mt-3 block">Sections</span>
+              {SECTION_LINKS.map((section) => (
+                <Link
+                  key={section.to}
+                  to={section.to}
+                  className={section.search === currentSectionSearch ? "zs-mobile-link is-active" : "zs-mobile-link"}
+                  onClick={closeMenu}
+                >
+                  {section.label}
+                </Link>
+              ))}
               <Link className="zs-nav-cta mt-2 w-full justify-center" to="/policies/new" onClick={closeMenu}>
                 Request a Quote
               </Link>
@@ -134,7 +178,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <footer className="border-t border-[hsl(var(--border)/0.7)]">
         <div className="mx-auto max-w-5xl px-5 py-12">
-          <div className="grid gap-10 md:grid-cols-[1.5fr_1fr_1fr]">
+          <div className="grid gap-10 md:grid-cols-[1.5fr_1fr_1fr_1fr]">
             <div>
               <Brand compact />
               <p className="mt-5 max-w-md text-sm leading-6 text-[hsl(var(--muted-foreground))]">
@@ -142,6 +186,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 every quote, ticket, stake, reading, and payout, this site only reads and writes to it.
               </p>
               <ExplorerLink className="zs-footer-link mt-4 inline-flex items-center gap-1.5 text-sm underline-offset-4 hover:underline" />
+            </div>
+
+            <div>
+              <span className="zs-tag">Sections</span>
+              <ul className="mt-4 space-y-2.5 text-sm">
+                {SECTION_LINKS.map((section) => {
+                  const isCurrent = section.search === currentSectionSearch;
+                  return (
+                    <li key={section.to}>
+                      <Link
+                        className={isCurrent ? "zs-footer-link is-current" : "zs-footer-link"}
+                        to={section.to}
+                        aria-current={isCurrent ? "page" : undefined}
+                      >
+                        {section.label}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
 
             <div>
