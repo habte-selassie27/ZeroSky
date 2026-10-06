@@ -119,7 +119,7 @@ The direct suite includes adversarial tests proving that:
 
 - Live app: [https://zerosky.vercel.app](https://zerosky.vercel.app)
 - Source: [https://github.com/ometere123/zerosky](https://github.com/ometere123/zerosky)
-- Contract: [`0xFA1bEB63fe8112FF2A265DD14F90A6F0E62ed0Ac`](https://explorer-studio.genlayer.com/address/0xFA1bEB63fe8112FF2A265DD14F90A6F0E62ed0Ac)
+- Contract: [`0xEaaE58C4d1a8D0c4DEc999b87a9733853825821a`](https://explorer-studio.genlayer.com/address/0xEaaE58C4d1a8D0c4DEc999b87a9733853825821a)
 - Corrected deployment: [`0x5a5c...be72`](https://explorer-studio.genlayer.com/tx/0x5a5c689d6e521efd1fb4e32573a14b2e4bf22a475bf4dcc71a22156cd9a4be72)
 - Seed 1000 GEN pool: [`0xe0be...f642`](https://explorer-studio.genlayer.com/tx/0xe0bebc04c18834c042a9435b354f2cac4a2a61d43e3a9231fcc70eae3911f642)
 - Finalized `LOW` quote (`ZSQ-1`): [`0x5ceb...cbc6`](https://explorer-studio.genlayer.com/tx/0x5ceb712f08bf085e5118c8d5832ae855c2b230ad4b9bff6b59ef1825d78ccbc6)

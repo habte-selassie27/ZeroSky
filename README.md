@@ -48,7 +48,7 @@ formula that turns raw numbers into "how likely is this" or "did this actually h
 
 - **Live app**: add deployment URL here when published
 - **Source**: add GitHub repo URL here when published
-- **Contract**: `0xFA1bEB63fe8112FF2A265DD14F90A6F0E62ed0Ac`
+- **Contract**: `0xEaaE58C4d1a8D0c4DEc999b87a9733853825821a`
 - **Main workflow**: request a quote (consensus prices historical likelihood into a risk band) ->
   buy cover from that quote for its exact required premium -> wait for the coverage window to end
   -> trigger `check_claim` -> validators normalize and reconcile public evidence into a numeric
@@ -341,8 +341,8 @@ LEADER_TIMEOUT are surfaced as retryable states rather than hard errors
 
 ## Deployed contract (StudioNet)
 
-- **Address**: `0xFA1bEB63fe8112FF2A265DD14F90A6F0E62ed0Ac`
-- **Explorer**: https://explorer-studio.genlayer.com/address/0xFA1bEB63fe8112FF2A265DD14F90A6F0E62ed0Ac
+- **Address**: `0xEaaE58C4d1a8D0c4DEc999b87a9733853825821a`
+- **Explorer**: https://explorer-studio.genlayer.com/address/0xEaaE58C4d1a8D0c4DEc999b87a9733853825821a
 - **Deploy tx**: `0x5a5c689d6e521efd1fb4e32573a14b2e4bf22a475bf4dcc71a22156cd9a4be72`
 
 This is the current deployment, carrying the Aug 10 review fixes: canonical provider units,
