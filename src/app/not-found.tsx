@@ -2,7 +2,7 @@ import { Link } from "react-router";
 
 export default function NotFoundPage() {
   return (
-    <main className="mx-auto max-w-3xl px-5 py-16 text-center">
+    <div className="mx-auto max-w-3xl px-5 py-16 text-center">
       <span className="zs-tag">404</span>
       <h1 className="mt-3 text-3xl font-semibold">Nothing on file at that address</h1>
       <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-[hsl(var(--muted-foreground))]">
@@ -17,6 +17,6 @@ export default function NotFoundPage() {
           Read the Ledger
         </Link>
       </div>
-    </main>
+    </div>
   );
 }

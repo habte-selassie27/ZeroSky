@@ -10,7 +10,7 @@ export default function PoliciesPage() {
   const policies = useLoaderData<typeof policiesLoader>();
 
   return (
-    <main className="mx-auto max-w-6xl px-5 py-10">
+    <div className="mx-auto max-w-6xl px-5 py-10">
       <span className="zs-tag">The ledger</span>
       <h1 className="mt-2 text-3xl font-semibold">Every ticket ever opened at the station</h1>
       <p className="mt-2 max-w-2xl text-sm text-[hsl(var(--muted-foreground))]">
@@ -48,6 +48,6 @@ export default function PoliciesPage() {
           ))}
         </div>
       )}
-    </main>
+    </div>
   );
 }

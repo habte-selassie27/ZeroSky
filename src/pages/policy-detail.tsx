@@ -17,7 +17,7 @@ export default function PolicyDetail() {
   const policy = useLoaderData<typeof policyLoader>();
 
   return (
-    <main className="mx-auto grid max-w-6xl gap-8 px-5 py-10 lg:grid-cols-[1fr_360px]">
+    <div className="mx-auto grid max-w-6xl gap-8 px-5 py-10 lg:grid-cols-[1fr_360px]">
       <section>
         <div className="flex items-center gap-3">
           <span className="zs-tag">{policy.id}</span>
@@ -98,7 +98,7 @@ export default function PolicyDetail() {
         <CheckClaimButton policyId={policy.id} status={policy.status} />
         <ExpireUnclaimedButton policyId={policy.id} status={policy.status} />
       </aside>
-    </main>
+    </div>
   );
 }
 

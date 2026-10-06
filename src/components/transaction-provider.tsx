@@ -150,7 +150,7 @@ export function TransactionRail() {
                 </div>
                 {isRetryable ? (
                   <p className="mt-2 text-xs text-[hsl(var(--warn))]">
-                    This is a retryable consensus state, not a failure. Validators may re-run the round.
+                    This is a retryable consensus state. The tx never committed, so no quote, policy, or payout exists from it -- re-run the action to start a new consensus round rather than waiting for this one.
                   </p>
                 ) : null}
                 <a

@@ -10,7 +10,7 @@ export default function RouteError() {
     error instanceof Error ? error.message : typeof error === "string" ? error : "The station couldn't answer that read.";
 
   return (
-    <main className="mx-auto max-w-3xl px-5 py-16 text-center">
+    <div className="mx-auto max-w-3xl px-5 py-16 text-center">
       <span className="zs-tag">Read failed</span>
       <h1 className="mt-3 text-3xl font-semibold">The chain didn&rsquo;t answer</h1>
       <p className="mx-auto mt-4 max-w-xl break-words text-sm leading-7 text-[hsl(var(--muted-foreground))]">{message}</p>
@@ -22,6 +22,6 @@ export default function RouteError() {
           Read the Ledger
         </Link>
       </div>
-    </main>
+    </div>
   );
 }

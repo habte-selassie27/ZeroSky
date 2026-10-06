@@ -37,7 +37,7 @@ export default function DashboardPage() {
 
   if (!wallet.address) {
     return (
-      <main className="mx-auto max-w-6xl px-5 py-10">
+      <div className="mx-auto max-w-6xl px-5 py-10">
         <div className="zs-station p-8">
           <span className="zs-tag">Your tickets</span>
           <h1 className="mt-2 text-3xl font-semibold">Connect a wallet to see your tickets in the log</h1>
@@ -46,12 +46,12 @@ export default function DashboardPage() {
             anything. Connecting only unlocks opening a ticket and pulling readings yourself.
           </p>
         </div>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="mx-auto grid max-w-6xl gap-8 px-5 py-10 lg:grid-cols-[1fr_360px]">
+    <div className="mx-auto grid max-w-6xl gap-8 px-5 py-10 lg:grid-cols-[1fr_360px]">
       <section>
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -107,6 +107,6 @@ export default function DashboardPage() {
       <aside>
         <TransactionRail />
       </aside>
-    </main>
+    </div>
   );
 }

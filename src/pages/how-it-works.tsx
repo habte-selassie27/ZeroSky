@@ -27,7 +27,7 @@ const steps = [
 
 export default function HowItWorksPage() {
   return (
-    <main className="mx-auto max-w-3xl px-5 py-10">
+    <div className="mx-auto max-w-3xl px-5 py-10">
       <span className="zs-tag">Station manual</span>
       <h1 className="mt-2 text-3xl font-semibold">How a ticket moves through the log</h1>
       <p className="mt-4 text-sm leading-7 text-[hsl(var(--muted-foreground))]">
@@ -42,6 +42,6 @@ export default function HowItWorksPage() {
           </li>
         ))}
       </ol>
-    </main>
+    </div>
   );
 }

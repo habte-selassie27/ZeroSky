@@ -1,4 +1,3 @@
-import { TransactionStatus } from "genlayer-js/types";
 import type { CalldataEncodable, GenLayerClient, TransactionHash } from "genlayer-js/types";
 import { CONTRACT_ADDRESS, REQUIRED_METHODS } from "./config";
 import { createReadClient } from "./read-client";
@@ -95,7 +94,11 @@ export async function findFinalizedQuote(
     }
     await new Promise((resolve) => window.setTimeout(resolve, 1500));
   }
-  throw new Error("Quote request finalized, but its on-chain quote record was not found.");
+  throw new Error(
+    "No new on-chain quote was recorded for this request. The consensus round may have timed out " +
+    "(Validators Timeout, nothing written) or VITE_ZEROSKY_CONTRACT may point at a different deployment " +
+    "than the transaction was sent to. Check the tx in the explorer against the configured contract.",
+  );
 }
 
 function quoteMatches(quote: Quote, requester: string, expected: QuoteFingerprint) {
@@ -157,17 +160,48 @@ async function readMaybe<T>(read: () => Promise<unknown>): Promise<T | undefined
   }
 }
 
+// Studio can report a valid SUCCESS GenVM trace while the overall consensus never reached
+// agreement (the tx ends at VALIDATORS_TIMEOUT). The GenVM execution_result alone is
+// therefore not enough to call a write committed: the terminal tx status must also be one of
+// the success states and the leader receipt must report a successful execution.
+const DECIDED_STATUSES = new Set([
+  "ACCEPTED",
+  "FINALIZED",
+  "CANCELED",
+  "UNDETERMINED",
+  "VALIDATORS_TIMEOUT",
+  "LEADER_TIMEOUT",
+]);
+const SUCCESS_STATUSES = new Set(["ACCEPTED", "FINALIZED"]);
+
 export async function waitAccepted(client: Client, hash: TransactionHash) {
-  const receipt = await client.waitForTransactionReceipt({
-    hash,
-    status: TransactionStatus.FINALIZED,
-    interval: 5000,
-    retries: 90,
-  });
-  const finalized = await client.getTransaction({ hash });
+  const deadline = Date.now() + 15 * 60 * 1000;
+  let finalized = await client.getTransaction({ hash });
+
+  for (;;) {
+    const status = String(finalized?.statusName ?? finalized?.status ?? "");
+    if (DECIDED_STATUSES.has(status)) break;
+    if (Date.now() > deadline) {
+      throw new Error(
+        `Timed out waiting for consensus on ${hash}: still in state "${status || "UNKNOWN"}". ` +
+        "Nothing was written on-chain; no GEN moved.",
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, 4000));
+    finalized = await client.getTransaction({ hash });
+  }
+
+  const status = String(finalized?.statusName ?? finalized?.status ?? "");
+  if (!SUCCESS_STATUSES.has(status)) {
+    throw new Error(
+      `GenLayer consensus for ${hash} ended in state ${status}, not a committed write. ` +
+      "No quote or policy was recorded and no payouts can be expected; retry the request, and check the tx in the explorer.",
+    );
+  }
+
   const result = finalized?.consensus_data?.leader_receipt?.[0]?.execution_result;
   if (result && result !== "SUCCESS") {
     throw new Error(`GenLayer contract execution failed (${result}). Transaction: ${hash}`);
   }
-  return receipt;
+  return finalized;
 }

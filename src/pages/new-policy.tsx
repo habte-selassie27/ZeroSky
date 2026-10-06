@@ -2,7 +2,7 @@ import { RequestQuoteThenBuy } from "@/components/write-actions";
 
 export default function NewPolicyPage() {
   return (
-    <main className="mx-auto max-w-2xl px-5 py-10">
+    <div className="mx-auto max-w-2xl px-5 py-10">
       <span className="zs-tag">Open a ticket</span>
       <h1 className="mt-2 text-3xl font-semibold">Request a quote, then write it into the log</h1>
       <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
@@ -16,6 +16,6 @@ export default function NewPolicyPage() {
       <div className="mt-8">
         <RequestQuoteThenBuy />
       </div>
-    </main>
+    </div>
   );
 }
