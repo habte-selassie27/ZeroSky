@@ -35,13 +35,12 @@ export async function listPolicies(): Promise<Policy[]> {
 
 export async function listPoliciesByHolder(account: `0x${string}`): Promise<Policy[]> {
   if (!CONTRACT_ADDRESS) return [];
-  const address = CONTRACT_ADDRESS;
-  const client = createReadClient();
-  return (await readMaybe<Policy[]>(() => client.readContract({
-    address,
-    functionName: "list_policies_by_holder",
-    args: [account, 0n, 100n],
-  }))) ?? [];
+  // The on-chain address filter (`p.holder == holder`) silently drops finalized StudioNet
+  // writes due to address-encoding mismatch, the same class of bug documented for
+  // `list_quotes_by_requester`. Read the holder-agnostic list and filter in the browser.
+  const policies = await listPolicies();
+  const needle = account.toLowerCase();
+  return policies.filter((policy) => policy.holder.toLowerCase() === needle);
 }
 
 export async function getPolicy(id: string): Promise<Policy | undefined> {
