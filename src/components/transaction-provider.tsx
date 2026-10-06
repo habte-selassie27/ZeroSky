@@ -12,7 +12,7 @@ type TransactionContextValue = {
 };
 
 const TransactionContext = createContext<TransactionContextValue | null>(null);
-const COMPLETE_STATUSES = ["ACCEPTED", "FINALIZED", "CANCELED", "UNDETERMINED"] as const;
+const COMPLETE_STATUSES = ["ACCEPTED", "FINALIZED", "CANCELED", "UNDETERMINED", "FAILED"] as const;
 const ACTIVE_STATUSES = ["PENDING", "PROPOSING", "COMMITTING", "REVEALING", "READY_TO_FINALIZE"] as const;
 const STALE_AFTER_MS = 2 * 60 * 60 * 1000;
 
@@ -61,12 +61,43 @@ export function TransactionProvider({ children }: { children: React.ReactNode })
     if (pending.length === 0) return;
     const client = createReadClient();
     let cancelled = false;
+    // One-shot audit of already-stored FINALIZED rows: a write that failed on-chain (e.g. a
+    // pool-guard revert) is reported by StudioNet as FINALIZED, so the persisted history
+    // could mislabel it as successful. Re-check those rows once at load and rewrite any
+    // execution-failed ones as FAILED.
+    const finalizedRows = staleMarked.filter((tx) => tx.status === "FINALIZED");
+    if (finalizedRows.length > 0) {
+      void (async () => {
+        for (const tx of finalizedRows) {
+          try {
+            const onchain = await client.getTransaction({ hash: tx.hash });
+            const executionResult = String(
+              onchain?.consensus_data?.leader_receipt?.[0]?.execution_result ?? "",
+            ).toUpperCase();
+            if (executionResult && executionResult !== "SUCCESS") {
+              persist(readTransactions().map((item) => (item.hash === tx.hash ? { ...item, status: "FAILED" as TxStage } : item)));
+            }
+          } catch {
+            // Lagging node or pruned tx: leave the row as-is.
+          }
+        }
+      })();
+    }
     async function refresh() {
       const refreshed = await Promise.all(
         pending.map(async (tx) => {
           try {
             const onchain = await client.getTransaction({ hash: tx.hash });
             const status = String(onchain?.statusName ?? tx.status).toUpperCase() as TxStage;
+            const executionResult = String(
+              onchain?.consensus_data?.leader_receipt?.[0]?.execution_result ?? "",
+            ).toUpperCase();
+            // A consensus round can finalize while the contract itself reverted (e.g. the
+            // pool-balance guard). StudioNet reports the tx as FINALIZED, so the rail must
+            // double-check the execution result, otherwise a failed write looks successful.
+            if (status === "FINALIZED" && executionResult && executionResult !== "SUCCESS") {
+              return { ...tx, status: "FAILED" as TxStage };
+            }
             return { ...tx, status };
           } catch {
             const created = Date.parse(tx.createdAt);
@@ -127,11 +158,17 @@ export function TransactionRail() {
         ) : (
           transactions.map((tx) => {
             const isRetryable = RETRYABLE.has(tx.status);
+            const isFailed = tx.status === "FAILED";
             return (
               <div key={tx.hash} className="zs-station border-[hsl(var(--border))] p-3">
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-sm font-medium">{tx.label}</span>
-                  <span className={`zs-pill ${isRetryable ? "zs-pulse" : ""}`}>{tx.status.replaceAll("_", " ")}</span>
+                  <span
+                    className={`zs-pill${isRetryable ? " zs-pulse" : ""}`}
+                    style={isFailed ? { borderColor: "hsl(var(--bad)/0.5)", color: "hsl(var(--bad))" } : undefined}
+                  >
+                    {tx.status.replaceAll("_", " ")}
+                  </span>
                 </div>
                 <div className="mt-3 grid grid-cols-6 gap-1" aria-label={`Transaction stage: ${tx.status}`}>
                   {stages.map((stage) => (
@@ -151,6 +188,11 @@ export function TransactionRail() {
                 {isRetryable ? (
                   <p className="mt-2 text-xs text-[hsl(var(--warn))]">
                     This is a retryable consensus state. The tx never committed, so no quote, policy, or payout exists from it -- re-run the action to start a new consensus round rather than waiting for this one.
+                  </p>
+                ) : null}
+                {isFailed ? (
+                  <p className="mt-2 text-xs" style={{ color: "hsl(var(--bad))" }}>
+                    The round finalized, but the contract execution reverted (for example a pool-balance guard). No policy or payout resulted -- fix the cause, then try again.
                   </p>
                 ) : null}
                 <a

@@ -106,7 +106,8 @@ export type TxStage =
   | "APPEAL_COMMITTING"
   | "READY_TO_FINALIZE"
   | "VALIDATORS_TIMEOUT"
-  | "LEADER_TIMEOUT";
+  | "LEADER_TIMEOUT"
+  | "FAILED";
 
 export type StoredTransaction = {
   hash: `0x${string}` & { length?: 66 };
