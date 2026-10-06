@@ -23,6 +23,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     if (typeof window === "undefined" || !window.ethereum) throw new Error("No injected wallet was found in this browser.");
     const accounts = (await window.ethereum.request({ method: "eth_requestAccounts" })) as `0x${string}`[];
     if (!accounts?.[0]) throw new Error("No wallet account was returned.");
+    const message = `ZeroSky: verify I own ${accounts[0]}`;
+    await window.ethereum.request({ method: "personal_sign", params: [message, accounts[0]] });
     setAddress(accounts[0]);
     setMode("injected");
   }, []);
