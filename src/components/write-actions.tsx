@@ -128,21 +128,53 @@ export function RequestQuoteThenBuy() {
   const wallet = useWallet();
   const txs = useTransactions();
   const dates = demoDates();
+  const FORM_KEY = "zerosky.quote-form.v1";
   const [step, setStep] = useState<"form" | "quoting" | "result" | "buying">("form");
-  const [state, setState] = useState({
-    peril: "RAIN",
-    location: "",
-    latitude: "",
-    longitude: "",
-    thresholdValue: "",
-    window: "SINGLE_DAY_MAX",
-    start: dates.start,
-    end: dates.end,
-    requestedPayout: "",
+  type QuoteFormState = {
+    peril: string;
+    location: string;
+    latitude: string;
+    longitude: string;
+    thresholdValue: string;
+    window: string;
+    start: string;
+    end: string;
+    requestedPayout: string;
+  };
+  const [state, setState] = useState<QuoteFormState>(() => {
+    const fallback: QuoteFormState = {
+      peril: "RAIN",
+      location: "",
+      latitude: "",
+      longitude: "",
+      thresholdValue: "",
+      window: "SINGLE_DAY_MAX",
+      start: dates.start,
+      end: dates.end,
+      requestedPayout: "",
+    };
+    try {
+      const saved = typeof window !== "undefined" ? window.localStorage.getItem(FORM_KEY) : null;
+      return saved ? { ...fallback, ...(JSON.parse(saved) as Partial<QuoteFormState>) } : fallback;
+    } catch {
+      return fallback;
+    }
   });
   const [quote, setQuote] = useState<Quote | null>(null);
   const [error, setError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
+
+  function update(patch: Partial<typeof state>) {
+    setState((prev) => {
+      const next = { ...prev, ...patch };
+      try {
+        window.localStorage.setItem(FORM_KEY, JSON.stringify(next));
+      } catch {
+        /* localStorage unavailable */
+      }
+      return next;
+    });
+  }
 
   async function requestQuote(event: React.FormEvent) {
     event.preventDefault();
@@ -235,7 +267,7 @@ export function RequestQuoteThenBuy() {
       <button
         type="button"
         className="zs-btn-ghost mb-5 px-3 py-1.5 text-sm"
-        onClick={() => setState({ ...state, ...DEMO_QUOTE })}
+        onClick={() => update({ ...DEMO_QUOTE })}
       >
         Fill example farm quote
       </button>
@@ -245,11 +277,12 @@ export function RequestQuoteThenBuy() {
           <select
             className="zs-input mt-2 w-full"
             value={state.peril}
-              onChange={(event) => setState({
-                ...state,
-                peril: event.target.value,
-                window: event.target.value === "RAIN" ? state.window : "SINGLE_DAY_MAX",
-              })}
+              onChange={(event) =>
+                update({
+                  peril: event.target.value,
+                  window: event.target.value === "RAIN" ? state.window : "SINGLE_DAY_MAX",
+                })
+              }
           >
             {PERILS.map((p) => (
               <option key={p.value} value={p.value}>
@@ -258,10 +291,10 @@ export function RequestQuoteThenBuy() {
             ))}
           </select>
         </label>
-        <Field label="Location" value={state.location} onChange={(location) => setState({ ...state, location })} placeholder="Green Valley Farm, Nakuru County, KE" />
+        <Field label="Location" value={state.location} onChange={(location) => update({ location })} placeholder="Green Valley Farm, Nakuru County, KE" />
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Latitude" value={state.latitude} onChange={(latitude) => setState({ ...state, latitude })} placeholder="-0.3031" />
-          <Field label="Longitude" value={state.longitude} onChange={(longitude) => setState({ ...state, longitude })} placeholder="36.0800" />
+          <Field label="Latitude" value={state.latitude} onChange={(latitude) => update({ latitude })} placeholder="-0.3031" />
+          <Field label="Longitude" value={state.longitude} onChange={(longitude) => update({ longitude })} placeholder="36.0800" />
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           <label>
@@ -274,7 +307,7 @@ export function RequestQuoteThenBuy() {
               step="1"
               className="zs-input mt-2 w-full"
               value={state.thresholdValue}
-              onChange={(event) => setState({ ...state, thresholdValue: event.target.value })}
+              onChange={(event) => update({ thresholdValue: event.target.value })}
               placeholder="80"
               required
             />
@@ -284,7 +317,7 @@ export function RequestQuoteThenBuy() {
             <select
               className="zs-input mt-2 w-full"
               value={state.window}
-              onChange={(event) => setState({ ...state, window: event.target.value })}
+              onChange={(event) => update({ window: event.target.value })}
             >
               {WINDOWS.filter((w) => state.peril === "RAIN" || w.value === "SINGLE_DAY_MAX").map((w) => (
                 <option key={w.value} value={w.value}>
@@ -304,7 +337,7 @@ export function RequestQuoteThenBuy() {
               type="datetime-local"
               className="zs-input mt-2 w-full"
               value={state.start}
-              onChange={(event) => setState({ ...state, start: event.target.value })}
+              onChange={(event) => update({ start: event.target.value })}
               required
             />
           </label>
@@ -314,7 +347,7 @@ export function RequestQuoteThenBuy() {
               type="datetime-local"
               className="zs-input mt-2 w-full"
               value={state.end}
-              onChange={(event) => setState({ ...state, end: event.target.value })}
+              onChange={(event) => update({ end: event.target.value })}
               required
             />
           </label>
@@ -322,7 +355,7 @@ export function RequestQuoteThenBuy() {
         <Field
           label="Payout you want if a claim is upheld (GEN)"
           value={state.requestedPayout}
-          onChange={(requestedPayout) => setState({ ...state, requestedPayout })}
+          onChange={(requestedPayout) => update({ requestedPayout })}
           placeholder="8"
         />
       </div>
