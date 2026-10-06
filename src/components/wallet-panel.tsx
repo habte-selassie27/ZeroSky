@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Copy, Download, KeyRound, LogOut, PlugZap } from "lucide-react";
+import { LogOut, PlugZap, KeyRound } from "lucide-react";
 import { useWallet } from "./wallet-provider";
 import { shortenAddress } from "@/lib/format";
 
 export function WalletPanel() {
   const wallet = useWallet();
   const [open, setOpen] = useState(false);
-  const [importValue, setImportValue] = useState("");
   const [message, setMessage] = useState("");
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -37,16 +36,9 @@ export function WalletPanel() {
     }
   }
 
-  function copyKey() {
-    const key = wallet.exportPrivateKey();
-    if (!key) return setMessage("No browser wallet key is active yet.");
-    navigator.clipboard.writeText(key);
-    setMessage("Private key copied. This is non-custodial: store it yourself. ZeroSky never sees it.");
-  }
-
   function disconnect() {
     wallet.disconnect();
-    setMessage("Disconnected. Your browser wallet key stays saved locally.");
+    setMessage("Disconnected.");
   }
 
   return (
@@ -72,47 +64,14 @@ export function WalletPanel() {
           <span className="zs-tag">Active identity</span>
           <div className="zs-mono mt-1 break-all text-sm">{wallet.address ?? "Browsing read-only"}</div>
           <div className="mt-4 grid gap-2">
-            <button className="zs-btn-ghost flex items-center justify-center gap-2 px-3 py-2 text-sm" onClick={wallet.useGenerated}>
-              <KeyRound size={14} aria-hidden /> Use browser wallet
-            </button>
             <button className="zs-btn-ghost flex items-center justify-center gap-2 px-3 py-2 text-sm" onClick={connectInjected}>
-              <PlugZap size={14} aria-hidden /> Use injected wallet
-            </button>
-            <button className="zs-btn-ghost flex items-center justify-center gap-2 px-3 py-2 text-sm" onClick={copyKey}>
-              <Download size={14} aria-hidden /> Export browser key
+              <PlugZap size={14} aria-hidden /> {wallet.mode === "injected" ? "Reconnect injected wallet" : "Connect injected wallet (MetaMask / Rabby)"}
             </button>
             {wallet.mode !== "none" ? (
               <button className="zs-btn-ghost flex items-center justify-center gap-2 px-3 py-2 text-sm" onClick={disconnect}>
                 <LogOut size={14} aria-hidden /> Disconnect
               </button>
             ) : null}
-          </div>
-          <div className="mt-4 rounded-md border p-3 text-xs" style={{ borderColor: "hsl(var(--warn)/0.5)", background: "hsl(var(--warn)/0.1)", color: "hsl(var(--warn))" }}>
-            The browser wallet is a locally generated key, non-custodial, and stored only in this browser&apos;s
-            localStorage. Export and back it up before relying on it. Losing it means losing access to policies
-            bought with it.
-          </div>
-          <label className="mt-4 block" htmlFor="import-key">
-            <span className="zs-tag">Import browser key</span>
-          </label>
-          <div className="mt-2 flex gap-2">
-            <input
-              id="import-key"
-              className="zs-input flex-1"
-              value={importValue}
-              onChange={(event) => setImportValue(event.target.value)}
-              placeholder="0x..."
-            />
-            <button
-              className="zs-btn-ghost px-3"
-              onClick={() => {
-                wallet.importGenerated(importValue as `0x${string}`);
-                setMessage("Imported.");
-              }}
-              title="Import"
-            >
-              <Copy size={16} aria-hidden />
-            </button>
           </div>
           {message ? (
             <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]" aria-live="polite">
