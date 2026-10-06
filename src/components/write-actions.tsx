@@ -86,8 +86,26 @@ function preflightQuoteError(state: {
   return null;
 }
 
+function describeError(error: unknown): string {
+  if (error instanceof Error) return error.message || String(error);
+  if (error && typeof error === "object") {
+    const candidate =
+      (error as { shortMessage?: unknown }).shortMessage ??
+      (error as { message?: unknown }).message ??
+      (error as { reason?: unknown }).reason ??
+      (error as { cause?: { message?: unknown } }).cause?.message;
+    if (typeof candidate === "string" && candidate) return candidate;
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return String(error);
+    }
+  }
+  return String(error);
+}
+
 function writeErrorMessage(error: unknown, fallback: string) {
-  const raw = error instanceof Error ? error.message || String(error) : String(error);
+  const raw = describeError(error);
   if (!raw) return fallback;
   if (raw.includes("Failed to fetch Version") || raw.includes("unknown RPC error")) {
     return "Injected wallet RPC is not compatible with this GenLayer write. Use the browser wallet instead, then try again.";
